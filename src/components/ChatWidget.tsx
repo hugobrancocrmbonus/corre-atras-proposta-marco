@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Send } from 'lucide-react'
 
@@ -7,7 +7,9 @@ import { Send } from 'lucide-react'
 interface ChatMessage {
   id: number
   text: string
+  content?: ReactNode
   sender: 'user' | 'bot'
+  variant?: 'bubble' | 'panel'
 }
 
 export interface ChatWidgetProps {
@@ -15,6 +17,12 @@ export interface ChatWidgetProps {
   subtitle: string
   suggestions: string[]
   getResponse: (input: string) => string
+  /** Quando fornecido, a resposta do bot é renderizada como um painel de largura
+   *  total (não uma bolha de chat) — usado para respostas ricas em UI, como um
+   *  "plano proposto". Tem prioridade sobre getResponse quando definido. */
+  getBotContent?: (input: string) => ReactNode
+  /** Incrementar este valor limpa a conversa (ex: após concluir uma ação). */
+  resetSignal?: number
   /** full-page: centered in a flex container (ConsultorPage)
    *  inline: stacked in flow, expands as conversation grows (CampaignListPage) */
   mode?: 'full-page' | 'inline'
@@ -39,7 +47,7 @@ function TypingDots() {
 
 /* ── main component ────────────────────────────────────────────────── */
 
-export function ChatWidget({ title, subtitle, suggestions, getResponse, mode = 'full-page' }: ChatWidgetProps) {
+export function ChatWidget({ title, subtitle, suggestions, getResponse, getBotContent, resetSignal, mode = 'full-page' }: ChatWidgetProps) {
   const [value, setValue] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isTyping, setIsTyping] = useState(false)
@@ -53,6 +61,12 @@ export function ChatWidget({ title, subtitle, suggestions, getResponse, mode = '
   useEffect(() => () => { timersRef.current.forEach(clearTimeout) }, [])
 
   useEffect(() => {
+    if (resetSignal === undefined) return
+    setMessages([])
+    setIsTyping(false)
+  }, [resetSignal])
+
+  useEffect(() => {
     if (mode === 'full-page') return
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping, mode])
@@ -63,12 +77,16 @@ export function ChatWidget({ title, subtitle, suggestions, getResponse, mode = '
     setValue('')
     setIsTyping(true)
     const t = setTimeout(() => {
-      setMessages(prev => [...prev, { id: idRef.current++, text: getResponse(text), sender: 'bot' }])
+      if (getBotContent) {
+        setMessages(prev => [...prev, { id: idRef.current++, text: '', content: getBotContent(text), sender: 'bot', variant: 'panel' }])
+      } else {
+        setMessages(prev => [...prev, { id: idRef.current++, text: getResponse(text), sender: 'bot' }])
+      }
       setIsTyping(false)
       timersRef.current = timersRef.current.filter(x => x !== t)
     }, 700 + Math.random() * 400)
     timersRef.current.push(t)
-  }, [isTyping, getResponse])
+  }, [isTyping, getResponse, getBotContent])
 
   // ── inner content (shared between modes) ───────────────────────────
   const inputAndChips = (
@@ -228,34 +246,47 @@ export function ChatWidget({ title, subtitle, suggestions, getResponse, mode = '
             style={{ overflow: 'hidden' }}
           >
             <div style={{
-              display: 'flex', flexDirection: 'column', gap: 10,
-              padding: '0 0 24px',
-              maxWidth: 832, margin: '0 auto',
+              display: 'flex', flexDirection: 'column', gap: 16,
+              padding: '0 0 24px', width: '100%',
             }}>
               {messages.map(m => (
-                <motion.div key={m.id}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-                  style={{
-                    alignSelf: m.sender === 'user' ? 'flex-end' : 'flex-start',
-                    maxWidth: '82%', padding: '10px 14px',
-                    borderRadius: m.sender === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                    backgroundColor: '#1D2124', border: '1px solid #3D464D',
-                    fontSize: 14, lineHeight: 1.55, color: 'var(--cds-text-primary)',
-                    wordBreak: 'break-word',
-                  }}
-                >
-                  {m.text}
-                </motion.div>
+                m.variant === 'panel' ? (
+                  <motion.div key={m.id}
+                    initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                    style={{ width: '100%' }}
+                  >
+                    {m.content}
+                  </motion.div>
+                ) : (
+                  <div key={m.id} style={{ display: 'flex', justifyContent: m.sender === 'user' ? 'flex-end' : 'flex-start', maxWidth: 832, margin: '0 auto', width: '100%' }}>
+                    <motion.div
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                      style={{
+                        maxWidth: '82%', padding: '10px 14px',
+                        borderRadius: m.sender === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                        backgroundColor: '#1D2124', border: '1px solid #3D464D',
+                        fontSize: 14, lineHeight: 1.55, color: 'var(--cds-text-primary)',
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {m.text}
+                    </motion.div>
+                  </div>
+                )
               ))}
               {isTyping && (
-                <div style={{
-                  alignSelf: 'flex-start', padding: '10px 14px',
-                  borderRadius: '14px 14px 14px 4px',
-                  backgroundColor: '#1D2124', border: '1px solid #3D464D',
-                }}>
-                  <TypingDots />
+                <div style={{ display: 'flex', justifyContent: 'flex-start', maxWidth: 832, margin: '0 auto', width: '100%' }}>
+                  <div style={{
+                    padding: '10px 14px',
+                    borderRadius: '14px 14px 14px 4px',
+                    backgroundColor: '#1D2124', border: '1px solid #3D464D',
+                  }}>
+                    <TypingDots />
+                  </div>
                 </div>
               )}
               <div ref={messagesEndRef} />

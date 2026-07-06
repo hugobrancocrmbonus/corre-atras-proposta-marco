@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Macrocard } from '@ds/Macrocard/Macrocard'
+import { SideDrawer } from '../components/SideDrawer'
 
 const B = import.meta.env.BASE_URL
 
@@ -41,7 +42,12 @@ const DECISIONS: Decision[] = [
   },
 ]
 
-const RULES = [
+interface Rule {
+  label: string
+  value: string
+}
+
+const INITIAL_RULES: Rule[] = [
   { label: 'Janela de churn',   value: '8 meses' },
   { label: 'Faixa de bônus',    value: 'R$150 - R$250' },
   { label: 'Limite por dia',    value: '50 disparos' },
@@ -54,6 +60,10 @@ const ACTIVITY = [
   { text: 'Público do dia montado - dois de baixa confiança separados', time: 'Hoje, 9h00' },
   { text: 'Oferta de gold ajustada de R$200,00 para R$220,00', time: 'Ontem, 18h40' },
   { text: 'Regras aprovadas por você', time: '28/06' },
+  { text: 'Piloto pausado para revisão manual', time: '25/06, 11h10' },
+  { text: '48 clientes contatados (Platinum e Gold)', time: '24/06, 14h05' },
+  { text: 'Janela de churn ajustada de 6 para 8 meses', time: '20/06, 10h30' },
+  { text: 'Piloto ativado para a loja Iguatemi SP', time: '15/06, 09h00' },
 ]
 
 function RuleRow({ label, value }: { label: string; value: string }) {
@@ -100,11 +110,41 @@ function DecisionCard({ decision, onResolve }: { decision: Decision; onResolve: 
   )
 }
 
+function RuleField({ rule, value, onChange }: { rule: Rule; value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span style={{ fontSize: 12, fontWeight: 500, color: '#8896A0' }}>{rule.label}</span>
+      <input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        style={{
+          height: 40, padding: '0 12px', backgroundColor: '#1D2124', border: '1px solid #3D464D', borderRadius: 4,
+          color: 'var(--cds-text-primary)', fontSize: 13, outline: 'none', fontFamily: 'inherit',
+        }}
+      />
+    </div>
+  )
+}
+
 export function PilotoTab() {
   const [pending, setPending] = useState<string[]>(DECISIONS.map(d => d.id))
+  const [rules, setRules] = useState<Rule[]>(INITIAL_RULES)
+  const [draftRules, setDraftRules] = useState<Rule[]>(INITIAL_RULES)
+  const [rulesDrawerOpen, setRulesDrawerOpen] = useState(false)
+  const [activityDrawerOpen, setActivityDrawerOpen] = useState(false)
 
   function resolve(id: string) {
     setPending(prev => prev.filter(p => p !== id))
+  }
+
+  function openRulesDrawer() {
+    setDraftRules(rules)
+    setRulesDrawerOpen(true)
+  }
+
+  function saveRules() {
+    setRules(draftRules)
+    setRulesDrawerOpen(false)
   }
 
   const visibleDecisions = DECISIONS.filter(d => pending.includes(d.id))
@@ -112,13 +152,14 @@ export function PilotoTab() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, padding: '24px 32px 32px 32px' }}>
 
-      {/* header row with "Em teste" tag */}
+      {/* header row with "Rodando" tag */}
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <span style={{
-          display: 'inline-flex', alignItems: 'center', height: 28, padding: '0 12px',
-          border: '1px solid #3D464D', borderRadius: 999, fontSize: 12, color: '#8896A0',
+          display: 'inline-flex', alignItems: 'center', gap: 6, height: 28, padding: '0 12px',
+          backgroundColor: 'rgba(82,146,36,0.15)', border: '1px solid #81D147', borderRadius: 999, fontSize: 12, color: '#81D147',
         }}>
-          Em teste
+          <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#81D147' }} />
+          Rodando
         </span>
       </div>
 
@@ -168,15 +209,18 @@ export function PilotoTab() {
             </div>
             <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 600, color: '#8896A0' }}>Histórico na marca</p>
             <div style={{ marginBottom: 16 }}>
-              {RULES.map(r => <RuleRow key={r.label} label={r.label} value={r.value} />)}
+              {rules.map(r => <RuleRow key={r.label} label={r.label} value={r.value} />)}
             </div>
             <p style={{ margin: '0 0 16px', fontSize: 12, color: '#8896A0', lineHeight: 1.5 }}>
               Você aprovou em 28/06. Ajustes valem para os próximos envios — o piloto não refaz o que já saiu.
             </p>
-            <button style={{
-              width: '100%', height: 40, border: '1px solid #EEF0F2', borderRadius: 4, background: 'none',
-              color: '#EEF0F2', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
-            }}>
+            <button
+              onClick={openRulesDrawer}
+              style={{
+                width: '100%', height: 40, border: '1px solid #EEF0F2', borderRadius: 4, background: 'none',
+                color: '#EEF0F2', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
               Ajustar regras
             </button>
           </div>
@@ -184,7 +228,7 @@ export function PilotoTab() {
           <div style={{ border: '1px solid #3D464D', borderRadius: 12, padding: 20, backgroundColor: '#1D2124' }}>
             <h4 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: 'var(--cds-text-primary)' }}>Atividade recente</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {ACTIVITY.map((a, i) => (
+              {ACTIVITY.slice(0, 4).map((a, i) => (
                 <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#80CDE9', marginTop: 6, flexShrink: 0 }} />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -194,15 +238,82 @@ export function PilotoTab() {
                 </div>
               ))}
             </div>
-            <button style={{
-              width: '100%', height: 36, marginTop: 16, border: '1px solid #3D464D', borderRadius: 4, background: 'none',
-              color: '#8896A0', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
-            }}>
+            <button
+              onClick={() => setActivityDrawerOpen(true)}
+              style={{
+                width: '100%', height: 36, marginTop: 16, border: '1px solid #3D464D', borderRadius: 4, background: 'none',
+                color: '#8896A0', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
               Ver tudo
             </button>
           </div>
         </div>
       </div>
+
+      {/* ── Drawer: ajustar regras ─────────────────────────────────────── */}
+      <SideDrawer
+        isOpen={rulesDrawerOpen}
+        onClose={() => setRulesDrawerOpen(false)}
+        title="Ajustar regras"
+        footer={
+          <>
+            <button
+              onClick={() => setRulesDrawerOpen(false)}
+              style={{ height: 40, padding: '0 16px', border: '1px solid #EEF0F2', borderRadius: 4, background: 'none', color: '#EEF0F2', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={saveRules}
+              style={{ height: 40, padding: '0 16px', border: 'none', borderRadius: 4, backgroundColor: '#E69400', color: '#14171A', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              Salvar regras
+            </button>
+          </>
+        }
+      >
+        <p style={{ margin: 0, fontSize: 13, color: '#8896A0', lineHeight: 1.5 }}>
+          Ajustes valem para os próximos envios — o piloto não refaz o que já saiu.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {draftRules.map((r, i) => (
+            <RuleField
+              key={r.label}
+              rule={r}
+              value={r.value}
+              onChange={v => setDraftRules(prev => prev.map((p, pi) => pi === i ? { ...p, value: v } : p))}
+            />
+          ))}
+        </div>
+      </SideDrawer>
+
+      {/* ── Drawer: atividade completa ────────────────────────────────── */}
+      <SideDrawer
+        isOpen={activityDrawerOpen}
+        onClose={() => setActivityDrawerOpen(false)}
+        title="Atividade recente"
+        footer={
+          <button
+            onClick={() => setActivityDrawerOpen(false)}
+            style={{ height: 40, padding: '0 16px', border: '1px solid #EEF0F2', borderRadius: 4, background: 'none', color: '#EEF0F2', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            Fechar
+          </button>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {ACTIVITY.map((a, i) => (
+            <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#80CDE9', marginTop: 6, flexShrink: 0 }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 14, color: 'var(--cds-text-primary)' }}>{a.text}</span>
+                <span style={{ fontSize: 12, color: '#8896A0' }}>{a.time}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </SideDrawer>
     </div>
   )
 }

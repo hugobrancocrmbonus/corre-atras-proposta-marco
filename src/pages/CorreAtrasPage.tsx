@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Tabs }        from '@ds/Tabs/Tabs'
 import { Macrocard }   from '@ds/Macrocard/Macrocard'
+import { ChatWidget }  from '../components/ChatWidget'
 import {
   ClientDetailDrawer,
   PerfilPill,
@@ -68,7 +70,7 @@ interface Campaign {
   status: 'Ativada' | 'Desativada'
 }
 
-const MOCK_CAMPAIGNS: Campaign[] = [
+const INITIAL_CAMPAIGNS: Campaign[] = [
   { id: '4321', name: 'Última chance – Corre atrás', lojas: 12, bonusPercent: '20%', bonusMin: 'R$200,00', bonusMax: 'R$400,00', volume: 50,  inativoMin: '7 meses',  inativoMax: '14 meses', status: 'Ativada' },
   { id: '2109', name: 'Campanha de maio',             lojas: 34, bonusPercent: '40%', bonusMin: 'R$100,00', bonusMax: 'R$200,00', volume: 100, inativoMin: '10 meses', inativoMax: '24 meses', status: 'Desativada' },
 ]
@@ -107,219 +109,207 @@ function buildAiPlan(prompt: string): AiPlan {
 
 const CHAT_SUGGESTIONS = ['Sumidos há + 8 meses', 'Clientes de vestido', 'Alto valor inativo']
 
-function PlanPromptInput({ onSubmit }: { onSubmit: (text: string) => void }) {
-  const [value, setValue] = useState('')
-  const hasText = value.trim().length > 0
-
-  function submit(text: string) {
-    if (!text.trim()) return
-    onSubmit(text.trim())
-    setValue('')
-  }
-
-  return (
-    <div style={{ width: '100%' }}>
-      <div style={{
-        borderRadius: 26, border: '1px solid #3D464D', backgroundColor: '#1D2124',
-        padding: 6, display: 'flex', alignItems: 'center', gap: 8,
-        boxShadow: '0 10px 24px -6px rgba(0,0,0,0.3)',
-      }}>
-        <input
-          value={value}
-          onChange={e => setValue(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submit(value) } }}
-          placeholder="Pergunte algo sobre o Agente IA..."
-          style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 14, color: 'var(--cds-text-primary)', fontFamily: 'inherit', padding: '8px 12px' }}
-        />
-        <button
-          onClick={() => submit(value)}
-          disabled={!hasText}
-          style={{
-            width: 40, height: 40, borderRadius: 20, border: 'none', flexShrink: 0,
-            backgroundColor: hasText ? '#FFBB40' : '#3D464D', color: hasText ? '#0F1416' : '#8896A0',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: hasText ? 'pointer' : 'not-allowed',
-          }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
-          </svg>
-        </button>
-      </div>
-      <div style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
-        {CHAT_SUGGESTIONS.map(s => (
-          <button
-            key={s}
-            onClick={() => submit(s)}
-            style={{
-              borderRadius: 9999, border: '1px solid #FFBB40', padding: '7px 14px', fontSize: 13, fontWeight: 500,
-              color: '#FFBB40', background: 'transparent', cursor: 'pointer', whiteSpace: 'nowrap',
-            }}
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function CampanhasTab() {
-  const [plan, setPlan] = useState<AiPlan | null>(null)
-  const [lastPrompt, setLastPrompt] = useState('')
-  const [premissas, setPremissas] = useState<string[]>([])
-  const [activeSegment, setActiveSegment] = useState('Platinum')
-
-  function handleSubmit(prompt: string) {
-    const p = buildAiPlan(prompt)
-    setLastPrompt(prompt)
-    setPlan(p)
-    setPremissas(p.premissas)
-    setActiveSegment(p.activeSegment)
-  }
+function PlanoPropostoCard({ plan, onApprove }: { plan: AiPlan; onApprove: (plan: AiPlan) => void }) {
+  const [premissas, setPremissas] = useState<string[]>(plan.premissas)
+  const [activeSegment, setActiveSegment] = useState(plan.activeSegment)
+  const [approved, setApproved] = useState(false)
 
   function removePremissa(label: string) {
     setPremissas(prev => prev.filter(p => p !== label))
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, padding: '24px 32px 32px 32px' }}>
+    <div style={{
+      borderRadius: 24, padding: '32px 40px',
+      background: 'linear-gradient(rgb(20,23,26), rgb(20,23,26)) padding-box, linear-gradient(90deg, rgba(255,187,64,0.65), rgba(34,39,43,0.3)) border-box',
+      border: '1px solid transparent',
+    }}>
+      <h3 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 700, color: 'var(--cds-text-primary)' }}>Plano proposto</h3>
+      <p style={{ margin: '0 0 16px', fontSize: 14, color: '#BCC6CD', lineHeight: 1.5 }}>
+        Oferta coerente com o ticket da marca, público dentro dos limites e sem dado sensível na mensagem. 2 clientes com telefone a confirmar ficaram de fora. Premissas aplicadas:
+      </p>
 
-      {/* prompt input */}
-      <div style={{ maxWidth: 832, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, paddingTop: plan ? 0 : 40, paddingBottom: plan ? 0 : 40 }}>
-        {plan ? (
-          <div style={{
-            width: '100%', display: 'inline-flex', alignItems: 'center', gap: 10, padding: '10px 16px',
-            border: '1px solid #3D464D', borderRadius: 12, backgroundColor: '#1D2124',
-          }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8896A0" strokeWidth="1.5" style={{ flexShrink: 0 }}>
-              <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 32 }}>
+        {premissas.map(p => (
+          <button
+            key={p}
+            onClick={() => removePremissa(p)}
+            disabled={approved}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px',
+              backgroundColor: 'rgba(230,148,0,0.15)', border: '1px solid #FFBB40', borderRadius: 999,
+              color: '#FFBB40', fontSize: 12, fontWeight: 500, cursor: approved ? 'default' : 'pointer', fontFamily: 'inherit',
+              opacity: approved ? 0.6 : 1,
+            }}
+          >
+            {p}
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
             </svg>
-            <span style={{ fontSize: 14, color: '#BCC6CD' }}>{lastPrompt}</span>
-          </div>
-        ) : (
-          <div style={{ textAlign: 'center' }}>
-            <h2 style={{ fontSize: 26, fontWeight: 700, color: 'var(--cds-text-primary)', margin: '0 0 8px', lineHeight: 1.38 }}>
-              Diga quem você quer trazer de volta
-            </h2>
-            <p style={{ fontSize: 14, color: '#8896A0', lineHeight: 1.6, margin: 0 }}>
-              Descreva em uma frase. A inteligência monta o público na sua loja, sugere a oferta e aplica os limites. Você aprova antes de enviar.
-            </p>
-          </div>
-        )}
-        {!plan && <PlanPromptInput onSubmit={handleSubmit} />}
+          </button>
+        ))}
       </div>
 
-      {/* plano proposto */}
-      {plan && (
-        <div style={{
-          borderRadius: 24, padding: '32px 40px',
-          background: 'linear-gradient(rgb(20,23,26), rgb(20,23,26)) padding-box, linear-gradient(90deg, rgba(255,187,64,0.65), rgba(34,39,43,0.3)) border-box',
-          border: '1px solid transparent',
-        }}>
-          <h3 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 700, color: 'var(--cds-text-primary)' }}>Plano proposto</h3>
-          <p style={{ margin: '0 0 16px', fontSize: 14, color: '#BCC6CD', lineHeight: 1.5 }}>
-            Oferta coerente com o ticket da marca, público dentro dos limites e sem dado sensível na mensagem. 2 clientes com telefone a confirmar ficaram de fora. Premissas aplicadas:
-          </p>
-
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 32 }}>
-            {premissas.map(p => (
+      <div style={{ display: 'flex', gap: 24 }}>
+        {/* clientes elegíveis */}
+        <div style={{ flex: 1, minWidth: 0, border: '1px solid #3D464D', borderRadius: 12, padding: 20, backgroundColor: '#14171A' }}>
+          <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: 'var(--cds-text-primary)' }}>
+            {plan.segmentos.reduce((s, seg) => s + seg.count, 0)} clientes elegíveis hoje
+          </h4>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            {plan.segmentos.map(seg => (
               <button
-                key={p}
-                onClick={() => removePremissa(p)}
+                key={seg.label}
+                onClick={() => setActiveSegment(seg.label)}
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px',
-                  backgroundColor: 'rgba(230,148,0,0.15)', border: '1px solid #FFBB40', borderRadius: 999,
-                  color: '#FFBB40', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+                  height: 32, padding: '0 12px', borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit',
+                  fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap',
+                  border: activeSegment === seg.label ? '1px solid #80CDE9' : '1px solid #3D464D',
+                  backgroundColor: activeSegment === seg.label ? 'rgba(31,140,179,0.2)' : 'transparent',
+                  color: activeSegment === seg.label ? '#80CDE9' : '#8896A0',
                 }}
               >
-                {p}
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+                {seg.count} {seg.label}
               </button>
             ))}
           </div>
-
-          <div style={{ display: 'flex', gap: 24 }}>
-            {/* clientes elegíveis */}
-            <div style={{ flex: 1, minWidth: 0, border: '1px solid #3D464D', borderRadius: 12, padding: 20, backgroundColor: '#14171A' }}>
-              <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: 'var(--cds-text-primary)' }}>
-                {plan.segmentos.reduce((s, seg) => s + seg.count, 0)} clientes elegíveis hoje
-              </h4>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                {plan.segmentos.map(seg => (
-                  <button
-                    key={seg.label}
-                    onClick={() => setActiveSegment(seg.label)}
-                    style={{
-                      height: 32, padding: '0 12px', borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit',
-                      fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap',
-                      border: activeSegment === seg.label ? '1px solid #80CDE9' : '1px solid #3D464D',
-                      backgroundColor: activeSegment === seg.label ? 'rgba(31,140,179,0.2)' : 'transparent',
-                      color: activeSegment === seg.label ? '#80CDE9' : '#8896A0',
-                    }}
-                  >
-                    {seg.count} {seg.label}
-                  </button>
-                ))}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {plan.clientesElegiveis.map(c => (
-                  <div key={c.nome} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #22272B' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--cds-text-primary)' }}>{c.nome}</span>
-                      <span style={{ fontSize: 12, color: '#8896A0' }}>{c.ultimaCompra}</span>
-                    </div>
-                    <span style={{ fontSize: 12, color: '#8896A0', alignSelf: 'center' }}>{c.padrao}</span>
-                  </div>
-                ))}
-              </div>
-              <button style={{ marginTop: 12, background: 'none', border: 'none', color: '#FFBB40', fontSize: 13, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
-                Ver os {plan.segmentos.reduce((s, seg) => s + seg.count, 0)} clientes
-              </button>
-            </div>
-
-            {/* mensagem preview */}
-            <div style={{ flex: 1, minWidth: 0, border: '1px solid #3D464D', borderRadius: 12, padding: 20, backgroundColor: '#14171A' }}>
-              <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: 'var(--cds-text-primary)' }}>{plan.planTitle}</h4>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-                {[`Bônus: ${plan.bonus}`, `Mínimo: ${plan.minimo}`, `Validade ${plan.validade}`].map(t => (
-                  <span key={t} style={{ height: 28, padding: '0 12px', display: 'inline-flex', alignItems: 'center', border: '1px solid #3D464D', borderRadius: 999, fontSize: 12, color: '#BCC6CD' }}>
-                    {t}
-                  </span>
-                ))}
-              </div>
-              <div style={{
-                backgroundColor: '#25BFB8', borderRadius: 16, padding: 16,
-                boxShadow: '0px 8px 16px rgba(16,24,40,0.1), 0px 20px 40px rgba(16,24,40,0.16)',
-              }}>
-                <p style={{ margin: 0, fontSize: 14, lineHeight: '22px', color: '#121416', whiteSpace: 'pre-wrap' }}>{plan.mensagem}</p>
-                <div style={{ borderTop: '1px solid rgba(0,0,0,0.2)', marginTop: 10, paddingTop: 10, textAlign: 'center' }}>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: '#003c02' }}>Ativar</span>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {plan.clientesElegiveis.map(c => (
+              <div key={c.nome} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #22272B' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--cds-text-primary)' }}>{c.nome}</span>
+                  <span style={{ fontSize: 12, color: '#8896A0' }}>{c.ultimaCompra}</span>
                 </div>
+                <span style={{ fontSize: 12, color: '#8896A0', alignSelf: 'center' }}>{c.padrao}</span>
               </div>
-              <button style={{ marginTop: 12, background: 'none', border: 'none', color: '#FFBB40', fontSize: 13, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
-                Editar mensagem
-              </button>
+            ))}
+          </div>
+          <button style={{ marginTop: 12, background: 'none', border: 'none', color: '#FFBB40', fontSize: 13, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
+            Ver os {plan.segmentos.reduce((s, seg) => s + seg.count, 0)} clientes
+          </button>
+        </div>
+
+        {/* mensagem preview */}
+        <div style={{ flex: 1, minWidth: 0, border: '1px solid #3D464D', borderRadius: 12, padding: 20, backgroundColor: '#14171A' }}>
+          <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: 'var(--cds-text-primary)' }}>{plan.planTitle}</h4>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+            {[`Bônus: ${plan.bonus}`, `Mínimo: ${plan.minimo}`, `Validade ${plan.validade}`].map(t => (
+              <span key={t} style={{ height: 28, padding: '0 12px', display: 'inline-flex', alignItems: 'center', border: '1px solid #3D464D', borderRadius: 999, fontSize: 12, color: '#BCC6CD' }}>
+                {t}
+              </span>
+            ))}
+          </div>
+          <div style={{
+            backgroundColor: '#25BFB8', borderRadius: 16, padding: 16,
+            boxShadow: '0px 8px 16px rgba(16,24,40,0.1), 0px 20px 40px rgba(16,24,40,0.16)',
+          }}>
+            <p style={{ margin: 0, fontSize: 14, lineHeight: '22px', color: '#121416', whiteSpace: 'pre-wrap' }}>{plan.mensagem}</p>
+            <div style={{ borderTop: '1px solid rgba(0,0,0,0.2)', marginTop: 10, paddingTop: 10, textAlign: 'center' }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: '#003c02' }}>Ativar</span>
             </div>
           </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
-            <button style={{ height: 40, padding: '0 20px', border: '1px solid #EEF0F2', borderRadius: 4, background: 'none', color: '#EEF0F2', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
-              Ajustar
-            </button>
-            <button style={{ height: 40, padding: '0 20px', border: 'none', borderRadius: 4, backgroundColor: '#E69400', color: '#14171A', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
-              Aprovar e criar ação
-            </button>
-          </div>
+          <button style={{ marginTop: 12, background: 'none', border: 'none', color: '#FFBB40', fontSize: 13, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
+            Editar mensagem
+          </button>
         </div>
-      )}
+      </div>
 
-      {plan && (
-        <div style={{ maxWidth: 832, margin: '0 auto', width: '100%' }}>
-          <PlanPromptInput onSubmit={handleSubmit} />
-        </div>
-      )}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
+        <button
+          disabled={approved}
+          style={{ height: 40, padding: '0 20px', border: '1px solid #EEF0F2', borderRadius: 4, background: 'none', color: '#EEF0F2', fontSize: 14, fontWeight: 500, cursor: approved ? 'default' : 'pointer', fontFamily: 'inherit', opacity: approved ? 0.5 : 1 }}
+        >
+          Ajustar
+        </button>
+        <button
+          disabled={approved}
+          onClick={() => { setApproved(true); onApprove(plan) }}
+          style={{ height: 40, padding: '0 20px', border: 'none', borderRadius: 4, backgroundColor: approved ? '#4DB6A3' : '#E69400', color: '#14171A', fontSize: 14, fontWeight: 500, cursor: approved ? 'default' : 'pointer', fontFamily: 'inherit' }}
+        >
+          {approved ? 'Ação criada ✓' : 'Aprovar e criar ação'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function SuccessToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDismiss, 4500)
+    return () => clearTimeout(t)
+  }, [onDismiss])
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -12 }}
+      transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px',
+        backgroundColor: 'rgba(82,146,36,0.15)', border: '1px solid #81D147', borderRadius: 8,
+      }}
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#81D147" strokeWidth="2" style={{ flexShrink: 0 }}>
+        <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span style={{ fontSize: 14, color: '#EEF0F2', flex: 1 }}>{message}</span>
+      <button onClick={onDismiss} aria-label="Fechar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8896A0', padding: 4 }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+    </motion.div>
+  )
+}
+
+function CampanhasTab() {
+  const [campaigns, setCampaigns] = useState<Campaign[]>(INITIAL_CAMPAIGNS)
+  const [resetSignal, setResetSignal] = useState(0)
+  const [toast, setToast] = useState<string | null>(null)
+  const idRef = useRef(4321)
+
+  function handleApprove(plan: AiPlan) {
+    idRef.current += 1
+    const newCampaign: Campaign = {
+      id: String(idRef.current),
+      name: plan.planTitle,
+      lojas: 12,
+      bonusPercent: '20%',
+      bonusMin: plan.minimo,
+      bonusMax: plan.bonus,
+      volume: plan.segmentos.reduce((s, seg) => s + seg.count, 0),
+      inativoMin: '8 meses',
+      inativoMax: '24 meses',
+      status: 'Ativada',
+    }
+    setCampaigns(prev => [newCampaign, ...prev])
+    setToast(`Ação "${plan.planTitle}" criada com sucesso.`)
+    setTimeout(() => setResetSignal(s => s + 1), 900)
+  }
+
+  function getBotContent(prompt: string) {
+    const plan = buildAiPlan(prompt)
+    return <PlanoPropostoCard plan={plan} onApprove={handleApprove} />
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, padding: '24px 32px 32px 32px' }}>
+
+      <AnimatePresence>
+        {toast && <SuccessToast message={toast} onDismiss={() => setToast(null)} />}
+      </AnimatePresence>
+
+      {/* chat */}
+      <ChatWidget
+        mode="inline"
+        title="Diga quem você quer trazer de volta"
+        subtitle="Descreva em uma frase. A inteligência monta o público na sua loja, sugere a oferta e aplica os limites. Você aprova antes de enviar."
+        suggestions={CHAT_SUGGESTIONS}
+        getResponse={() => ''}
+        getBotContent={getBotContent}
+        resetSignal={resetSignal}
+      />
 
       {/* lista de ações */}
       <div>
@@ -370,26 +360,33 @@ function CampanhasTab() {
               </tr>
             </thead>
             <tbody>
-              {MOCK_CAMPAIGNS.map(c => (
-                <tr key={c.id}>
-                  {[c.id, c.name, c.lojas, c.bonusPercent, c.bonusMin, c.bonusMax, c.volume, c.inativoMin, c.inativoMax].map((v, i) => (
-                    <td key={i} style={{ padding: '0 16px', fontSize: 12, fontWeight: i === 1 ? 500 : 400, lineHeight: '64px', color: 'var(--cds-text-primary)', whiteSpace: 'nowrap', borderBottom: '1px solid var(--cds-border-subtle)', height: 64 }}>
-                      {v}
+              <AnimatePresence initial={false}>
+                {campaigns.map(c => (
+                  <motion.tr
+                    key={c.id}
+                    initial={{ opacity: 0, backgroundColor: 'rgba(129,209,71,0.15)' }}
+                    animate={{ opacity: 1, backgroundColor: 'rgba(129,209,71,0)' }}
+                    transition={{ duration: 1.1 }}
+                  >
+                    {[c.id, c.name, c.lojas, c.bonusPercent, c.bonusMin, c.bonusMax, c.volume, c.inativoMin, c.inativoMax].map((v, i) => (
+                      <td key={i} style={{ padding: '0 16px', fontSize: 12, fontWeight: i === 1 ? 500 : 400, lineHeight: '64px', color: 'var(--cds-text-primary)', whiteSpace: 'nowrap', borderBottom: '1px solid var(--cds-border-subtle)', height: 64 }}>
+                        {v}
+                      </td>
+                    ))}
+                    <td style={{ padding: '0 16px', fontSize: 12, borderBottom: '1px solid var(--cds-border-subtle)', height: 64 }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 500, color: c.status === 'Ativada' ? '#81D147' : '#DD3C3C' }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'currentColor', flexShrink: 0 }} />
+                        {c.status}
+                      </span>
                     </td>
-                  ))}
-                  <td style={{ padding: '0 16px', fontSize: 12, borderBottom: '1px solid var(--cds-border-subtle)', height: 64 }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 500, color: c.status === 'Ativada' ? '#81D147' : '#DD3C3C' }}>
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'currentColor', flexShrink: 0 }} />
-                      {c.status}
-                    </span>
-                  </td>
-                  <td style={{ padding: '0 16px', textAlign: 'center', borderBottom: '1px solid var(--cds-border-subtle)', height: 64 }}>
-                    <button style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#80CDE9', cursor: 'pointer', fontWeight: 400 }}>
-                      Ver detalhes
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    <td style={{ padding: '0 16px', textAlign: 'center', borderBottom: '1px solid var(--cds-border-subtle)', height: 64 }}>
+                      <button style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#80CDE9', cursor: 'pointer', fontWeight: 400 }}>
+                        Ver detalhes
+                      </button>
+                    </td>
+                  </motion.tr>
+                ))}
+              </AnimatePresence>
             </tbody>
           </table>
         </div>
