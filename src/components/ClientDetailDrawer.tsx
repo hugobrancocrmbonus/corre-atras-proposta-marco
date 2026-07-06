@@ -25,6 +25,13 @@ export interface ExpectedClient {
   dica: string
 }
 
+const PLACEHOLDER_CLIENT: ExpectedClient = {
+  id: 0, nome: '', telefone: '', perfil: 'Platinum', ultimaCompra: '', diasAusente: '',
+  categoria: '', padrao: '', bonus: '', minResgate: '', vencimento: '', vencimentoLevel: 'normal',
+  historico: { comprasNaMarca: 0, frequencia: '', ticketHistorico: '', ultimaCompraData: '', categoriaPreferida: '', lojaPreferida: '' },
+  dica: '',
+}
+
 export const PERFIL_TAG_STYLE: Record<ExpectedClient['perfil'], { bg: string; border: string; color: string }> = {
   Platinum: { bg: 'rgba(31,140,179,0.2)', border: '#80CDE9', color: '#80CDE9' },
   Gold:     { bg: 'rgba(230,148,0,0.2)',  border: '#FFBB40', color: '#FFBB40' },
@@ -87,17 +94,17 @@ function HistoricoRow({ label, value }: { label: string; value: string }) {
 }
 
 export function ClientDetailDrawer({ client, onClose }: ClientDetailDrawerProps) {
-  // Mantém o último cliente renderizado durante a animação de saída (evita "flash" de conteúdo vazio)
-  const [renderedClient, setRenderedClient] = useState<ExpectedClient | null>(client)
+  // Mantém o último cliente renderizado durante a animação de saída (evita "flash" de
+  // conteúdo vazio) e começa com um placeholder — assim o SideDrawer já existe no DOM,
+  // pintado no estado "fechado", desde o primeiro carregamento da página. Sem isso, a
+  // primeira abertura monta e anima no mesmo frame e a transição engasga.
+  const [renderedClient, setRenderedClient] = useState<ExpectedClient>(client ?? PLACEHOLDER_CLIENT)
 
   useEffect(() => {
     if (client) setRenderedClient(client)
   }, [client])
 
   const isOpen = client !== null
-
-  if (!renderedClient) return null
-
   const perfilStyle = PERFIL_TAG_STYLE[renderedClient.perfil]
   const vencStyle = VENCIMENTO_STYLE[renderedClient.vencimentoLevel]
 
