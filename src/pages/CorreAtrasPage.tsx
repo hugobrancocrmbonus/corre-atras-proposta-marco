@@ -109,6 +109,141 @@ function buildAiPlan(prompt: string): AiPlan {
 
 const CHAT_SUGGESTIONS = ['Sumidos há + 8 meses', 'Clientes de vestido', 'Alto valor inativo']
 
+const GENERATION_STEPS = [
+  'Entendendo a intenção',
+  'Montando o público na sua loja',
+  'Aplicando os limites e a oferta',
+  'Preparando a mensagem',
+]
+
+type StepState = 'finished' | 'current' | 'waiting'
+
+function StepCircle({ state, number }: { state: StepState; number: number }) {
+  if (state === 'finished') {
+    return (
+      <div style={{
+        width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+        backgroundColor: 'rgba(82,146,36,0.2)', border: '1px solid #ADE187',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ADE187" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      </div>
+    )
+  }
+  if (state === 'current') {
+    return (
+      <div style={{
+        width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+        backgroundColor: 'rgba(47,55,60,0.2)', border: '1px solid #FFBB40',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 12, fontWeight: 600, color: '#FFBB40',
+      }}>
+        {number}
+      </div>
+    )
+  }
+  return (
+    <div style={{
+      width: 24, height: 24, borderRadius: '50%', flexShrink: 0, opacity: 0.5,
+      backgroundColor: 'rgba(47,55,60,0.2)', border: '1px solid #C0C8CE',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 12, fontWeight: 600, color: '#C0C8CE',
+    }}>
+      {number}
+    </div>
+  )
+}
+
+function GenerationSteps({ currentStep }: { currentStep: number }) {
+  return (
+    <div style={{ display: 'flex', alignSelf: 'stretch', width: '100%' }}>
+      {GENERATION_STEPS.map((title, i) => {
+        const state: StepState = i < currentStep ? 'finished' : i === currentStep ? 'current' : 'waiting'
+        const tailDone = i < currentStep
+        return (
+          <div key={title} style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, position: 'relative' }}>
+            {i > 0 && (
+              <div style={{
+                position: 'absolute', top: 12, right: '50%', width: '100%', height: 1,
+                backgroundColor: tailDone ? '#ADE187' : (i === currentStep ? '#FFBB40' : '#3D464D'),
+                opacity: tailDone || i === currentStep ? 1 : 0.5,
+                transition: 'background-color 0.4s',
+              }} />
+            )}
+            <StepCircle state={state} number={i + 1} />
+            <span style={{ fontSize: 12, color: state === 'waiting' ? '#8896A0' : 'var(--cds-text-primary)', lineHeight: 1.4, paddingRight: 12 }}>
+              {title}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function PlanGenerationFlow({ plan, onApprove }: { plan: AiPlan; onApprove: (plan: AiPlan) => void }) {
+  const [currentStep, setCurrentStep] = useState(0)
+  const [done, setDone] = useState(false)
+
+  useEffect(() => {
+    if (currentStep >= GENERATION_STEPS.length - 1) {
+      const t = setTimeout(() => setDone(true), 700)
+      return () => clearTimeout(t)
+    }
+    const t = setTimeout(() => setCurrentStep(s => s + 1), 850)
+    return () => clearTimeout(t)
+  }, [currentStep])
+
+  const progressPct = Math.min(100, Math.round(((currentStep + 1) / GENERATION_STEPS.length) * 100))
+
+  return (
+    <AnimatePresence mode="wait">
+      {!done ? (
+        <motion.div
+          key="generating"
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.25 }}
+          style={{
+            borderRadius: 24, padding: '32px 40px',
+            background: 'linear-gradient(rgb(20,23,26), rgb(20,23,26)) padding-box, linear-gradient(90deg, rgba(255,187,64,0.65), rgba(34,39,43,0.3)) border-box',
+            border: '1px solid transparent', display: 'flex', flexDirection: 'column', gap: 32,
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 587 }}>
+            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--cds-text-primary)' }}>Montando seu público</h3>
+            <p style={{ margin: 0, fontSize: 14, color: '#FFFFFF', lineHeight: 1.4 }}>
+              A inteligência está lendo a base da sua loja. Costuma levar cerca de 3 minutos.
+            </p>
+          </div>
+
+          {/* progress bar */}
+          <div style={{ width: '100%', height: 8, borderRadius: 999, backgroundColor: '#2F373C', overflow: 'hidden' }}>
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${progressPct}%` }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
+              style={{ height: '100%', borderRadius: 999, backgroundColor: '#FFBB40' }}
+            />
+          </div>
+
+          <GenerationSteps currentStep={currentStep} />
+        </motion.div>
+      ) : (
+        <motion.div
+          key="plan"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+        >
+          <PlanoPropostoCard plan={plan} onApprove={onApprove} />
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
+
 function PlanoPropostoCard({ plan, onApprove }: { plan: AiPlan; onApprove: (plan: AiPlan) => void }) {
   const [premissas, setPremissas] = useState<string[]>(plan.premissas)
   const [activeSegment, setActiveSegment] = useState(plan.activeSegment)
@@ -290,7 +425,7 @@ function CampanhasTab() {
 
   function getBotContent(prompt: string) {
     const plan = buildAiPlan(prompt)
-    return <PlanoPropostoCard plan={plan} onApprove={handleApprove} />
+    return <PlanGenerationFlow plan={plan} onApprove={handleApprove} />
   }
 
   return (
