@@ -1,0 +1,52 @@
+@import './tokens/index.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes macrocard-blob-drift {
+  0%   { transform: translate(0, 0) scale(1); }
+  33%  { transform: translate(-18px, 12px) scale(1.12); }
+  66%  { transform: translate(14px, -10px) scale(0.92); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+@keyframes macrocard-glow-spin {
+  0%   { transform: translateX(-50%) translateY(-50%) rotate(172deg); opacity: 0.6; }
+  50%  { transform: translateX(-50%) translateY(-50%) rotate(352deg); opacity: 1; }
+  100% { transform: translateX(-50%) translateY(-50%) rotate(532deg); opacity: 0.6; }
+}
+
+@keyframes macrocard-shimmer {
+  0%   { opacity: 0.4; }
+  50%  { opacity: 1; }
+  100% { opacity: 0.4; }
+}
+
+.dark-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #3d464d transparent;
+}
+.dark-scroll::-webkit-scrollbar { width: 4px; }
+.dark-scroll::-webkit-scrollbar-track { background: transparent; }
+.dark-scroll::-webkit-scrollbar-thumb { background: #3d464d; border-radius: 999px; }
+
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html, body, #root {
+    height: 100%;
+  }
+
+  body {
+    font-family: var(--font-family-base);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-base);
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
